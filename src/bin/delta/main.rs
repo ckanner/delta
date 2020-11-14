@@ -1,30 +1,5 @@
 extern crate bitflags;
 
-#[macro_use]
-extern crate error_chain;
-
-mod align;
-mod ansi;
-mod bat;
-mod cli;
-mod color;
-mod config;
-mod delta;
-mod draw;
-mod edits;
-mod env;
-mod features;
-mod format;
-mod git_config;
-mod git_config_entry;
-mod options;
-mod paint;
-mod parse;
-mod parse_style;
-mod style;
-mod syntect_color;
-mod tests;
-
 use std::io::{self, ErrorKind, Read, Write};
 use std::path::PathBuf;
 use std::process;
@@ -33,24 +8,17 @@ use bytelines::ByteLinesReader;
 use itertools::Itertools;
 use structopt::StructOpt;
 
-use crate::bat::assets::{list_languages, HighlightingAssets};
-use crate::bat::output::{OutputType, PagingMode};
-use crate::delta::delta;
-use crate::options::theme::is_light_syntax_theme;
-
-pub mod errors {
-    error_chain! {
-        foreign_links {
-            Io(::std::io::Error);
-            SyntectError(::syntect::LoadingError);
-            ParseIntError(::std::num::ParseIntError);
-        }
-    }
-}
+use git_delta::bat::assets::{list_languages, HighlightingAssets};
+use git_delta::bat::output::{OutputType, PagingMode};
+use git_delta::delta::delta;
+use git_delta::options::theme::is_light_syntax_theme;
 
 fn main() -> std::io::Result<()> {
     let assets = HighlightingAssets::new();
-    let opt = cli::Opt::from_args_and_git_config(&mut git_config::GitConfig::try_create(), assets);
+    let opt = git_delta::cli::Opt::from_args_and_git_config(
+        &mut git_delta::git_config::GitConfig::try_create(),
+        assets,
+    );
 
     if opt.list_languages {
         list_languages()?;
@@ -64,7 +32,7 @@ fn main() -> std::io::Result<()> {
     }
 
     let _show_config = opt.show_config;
-    let config = config::Config::from(opt);
+    let config = git_delta::config::Config::from(opt);
 
     if _show_config {
         show_config(&config);
@@ -93,7 +61,7 @@ fn main() -> std::io::Result<()> {
 fn diff(
     minus_file: Option<&PathBuf>,
     plus_file: Option<&PathBuf>,
-    config: &config::Config,
+    config: &git_delta::config::Config,
 ) -> std::io::Result<()> {
     use std::io::BufReader;
     let die = || {
@@ -129,7 +97,7 @@ fn diff(
     Ok(())
 }
 
-fn show_config(config: &config::Config) {
+fn show_config(config: &git_delta::config::Config) {
     // styles first
     println!(
         "    commit-style                  = {commit_style}
@@ -186,8 +154,8 @@ fn show_config(config: &config::Config) {
         "    inspect-raw-lines             = {inspect_raw_lines}
     keep-plus-minus-markers       = {keep_plus_minus_markers}",
         inspect_raw_lines = match config.inspect_raw_lines {
-            cli::InspectRawLines::True => "true",
-            cli::InspectRawLines::False => "false",
+            git_delta::cli::InspectRawLines::True => "true",
+            git_delta::cli::InspectRawLines::False => "false",
         },
         keep_plus_minus_markers = config.keep_plus_minus_markers,
     );
@@ -238,8 +206,8 @@ fn show_config(config: &config::Config) {
             .map(|t| t.name.unwrap_or_else(|| "none".to_string()))
             .unwrap_or_else(|| "none".to_string()),
         width = match config.decorations_width {
-            cli::Width::Fixed(width) => width.to_string(),
-            cli::Width::Variable => "variable".to_string(),
+            git_delta::cli::Width::Fixed(width) => width.to_string(),
+            git_delta::cli::Width::Variable => "variable".to_string(),
         },
         tab_width = config.tab_width,
         tokenization_regex = format_option_value(&config.tokenization_regex.to_string()),
@@ -265,12 +233,12 @@ where
 }
 
 fn show_syntax_themes() -> std::io::Result<()> {
-    let mut opt = cli::Opt::from_args();
+    let mut opt = git_delta::cli::Opt::from_args();
     let assets = HighlightingAssets::new();
     let mut output_type = OutputType::from_mode(
         PagingMode::QuitIfOneScreen,
         None,
-        &config::Config::from(cli::Opt::default()),
+        &git_delta::config::Config::from(git_delta::cli::Opt::default()),
     )
     .unwrap();
     let mut writer = output_type.handle().unwrap();
@@ -288,7 +256,7 @@ fn show_syntax_themes() -> std::io::Result<()> {
 }
 
 fn _show_syntax_themes(
-    mut opt: cli::Opt,
+    mut opt: git_delta::cli::Opt,
     is_light_mode: bool,
     writer: &mut dyn Write,
 ) -> std::io::Result<()> {
@@ -318,7 +286,7 @@ index f38589a..0f1bb83 100644
     };
 
     opt.computed.is_light_mode = is_light_mode;
-    let mut config = config::Config::from(opt);
+    let mut config = git_delta::config::Config::from(opt);
     let title_style = ansi_term::Style::new().bold();
     let assets = HighlightingAssets::new();
 
